@@ -31,9 +31,7 @@ class Misc(Cog):
         guild = self.bot.get_guild(cfg.Config.config['mods_guild'])
         user = guild.get_member(payload.user_id)
 
-        role_ids = set()
-        for r in user.roles:
-            role_ids.add(r.id)
+        role_ids = {r.id for r in user.roles}
         m = await self.bot.get_channel(payload.channel_id).fetch_message(payload.message_id)
         await m.remove_reaction(payload.emoji, discord.Object(payload.user_id))
         if user is not None and payload.emoji and cfg.Config.config['unverified_role'] in role_ids:
@@ -103,7 +101,7 @@ class Misc(Cog):
     async def on_message(self, message: discord.Message):
         if message.author.id in aphasiad:
             m_len = len(message.content.split())
-            x = ' '.join((choice(words) for i in range(m_len)))
+            x = ' '.join(choice(words) for _ in range(m_len))
             await message.delete()
             await message.channel.send(f'{message.author.mention}: {x}')
 

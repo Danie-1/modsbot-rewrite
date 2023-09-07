@@ -20,11 +20,13 @@ class Well(Cog):
 	def __init__(self, bot: commands.Bot): 
 		
 		self.bot = bot
-		
+
 		cursor = cfg.db.cursor()
-		cursor.execute(f'''INSERT OR IGNORE INTO settings (setting, value) VALUES
+		cursor.execute(
+			'''INSERT OR IGNORE INTO settings (setting, value) VALUES
             ('well_time', '00:00')
-            ''')					# Treated as UTC
+            '''
+		)
 		cfg.db.commit()
 		cursor.execute("SELECT value FROM settings WHERE setting = 'well_time'")
 		self.time = cursor.fetchone()[0].split(':')
@@ -106,7 +108,7 @@ class Well(Cog):
 		if days < 1:
 			await ctx.reply('Invalid number of days!')
 			return
-		
+
 		if person is None:
 			if ctx.message.reference is None:
 				await ctx.reply('Reply to a person or specify their ID!')
@@ -121,9 +123,9 @@ class Well(Cog):
 			await ctx.reply("This person can't be found!")
 			return
 		person_name = f'{person_na.name}#{person_na.discriminator}'
-		
+
 		well = cfg.Config.service.spreadsheets().values().get(spreadsheetId=cfg.Config.config['well_sheet'],
-                                                            	range=WELL_RANGE).execute().get('values', [])[::-1]
+		range=WELL_RANGE).execute().get('values', [])[::-1]
 		now = datetime.now(timezone.utc)
 		today = self.today()
 		current = now - (now - today - self.time) % timedelta(days = 1)
@@ -133,9 +135,16 @@ class Well(Cog):
 		else:
 			new = last + timedelta(days = 1)
 
-		append = []
-		for i in range(days):
-			append.append([(new + timedelta(days = i)).strftime('%d-%b-%Y'), i+1, person_name, str(person), 'Bucket List'])
+		append = [
+			[
+				(new + timedelta(days=i)).strftime('%d-%b-%Y'),
+				i + 1,
+				person_name,
+				str(person),
+				'Bucket List',
+			]
+			for i in range(days)
+		]
 		cfg.Config.service.spreadsheets().values().append(spreadsheetId=cfg.Config.config['well_sheet'],
 			range=WELL_RANGE, valueInputOption='RAW', insertDataOption='INSERT_ROWS',
 			body={"range": WELL_RANGE, "majorDimension": 'ROWS', "values": append}).execute()
