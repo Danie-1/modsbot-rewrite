@@ -98,7 +98,9 @@ class Potd(Cog):
     def prepare_dms(self, potd_row):
         def should_dm(x):
             for i in range(4):
-                if (['a', 'c', 'g', 'n'][i] in potd_row[5].lower()) and not (x[1][4*i] == 'x'):
+                if ['a', 'c', 'g', 'n'][i] in potd_row[5].lower() and x[1][
+                    4 * i
+                ] != 'x':
                     if int(x[1][4*i:4*i+2]) <= d <= int(x[1][4*i+2:4*i+4]):
                         return True
             return False
@@ -115,7 +117,7 @@ class Potd(Cog):
 
     def curator_id(self, curators, value):
         value = str(value)
-        if value == '':
+        if not value:
             return None
         for i in curators:
             for j in range(min(len(i), 4)):
@@ -128,10 +130,7 @@ class Potd(Cog):
         curators = cfg.Config.service.spreadsheets().values().get(spreadsheetId=cfg.Config.config['potd_sheet'],
                                                                range=CURATOR_RANGE).execute().get('values', [])
         curator_id = self.curator_id(curators, potd_row[3])
-        if curator_id is None:
-            curator = 'Unknown Curator'
-        else:
-            curator = f'<@!{curator_id}>'
+        curator = 'Unknown Curator' if curator_id is None else f'<@!{curator_id}>'
         difficulty_length = len(potd_row[5]) + len(potd_row[6])
         padding = (' ' * (max(35 - len(potd_row[4]), 1)))
 
@@ -143,9 +142,9 @@ class Potd(Cog):
             source.add_field(name='Difficulty', value=f'||`{str(potd_row[6]).ljust(5)}`||')
             source.add_field(name='Genre', value=f'||`{str(potd_row[5]).ljust(5)}`||')
         else:
-            source.add_field(name='Source', value=f'(To be revealed)')
-            source.add_field(name='Difficulty', value=f'(To be revealed)')
-            source.add_field(name='Genre', value=f'(To be revealed)')
+            source.add_field(name='Source', value='(To be revealed)')
+            source.add_field(name='Difficulty', value='(To be revealed)')
+            source.add_field(name='Genre', value='(To be revealed)')
 
         # Community Rating footer
         cursor = cfg.db.cursor()
@@ -174,7 +173,7 @@ class Potd(Cog):
                 except:
                     pass
             community_rating += "\n"
-        
+
         # Final footer
         source.set_footer(text=f'{community_rating}Use -rating {potd_row[0]} to check the community difficulty rating of this problem '
                             f'or -rate {potd_row[0]} rating to rate it yourself. React with a 👍 if you liked '
@@ -207,7 +206,7 @@ class Potd(Cog):
         curators = cfg.Config.service.spreadsheets().values().get(spreadsheetId=cfg.Config.config['potd_sheet'],
                                                                range=CURATOR_RANGE).execute().get('values', [])
         try:
-            i = int(potds[0][0]) - int(potd_id)
+            i = int(potds[0][0]) - potd_id
         except Exception:
             return 'Invalid entry (A2) in spreadsheet! '
         potd_row = potds[i]
@@ -227,7 +226,7 @@ class Potd(Cog):
             except Exception:
                 pass
         if urgent:
-            return mentions + f'<@&{cfg.Config.config["problem_curator_role"]}> '
+            return f'{mentions}<@&{cfg.Config.config["problem_curator_role"]}> '
         if mentions == '':
             return f'No responsible curators found for the potd on {potd_row[1]}!'
 
@@ -261,7 +260,7 @@ class Potd(Cog):
             to_tex = '<@419356082981568522>\n```tex\n \\textbf{Day ' + str(number) + '} --- ' + str(potd_row[2]) + ' ' + str(
                 potd_row[1]) + '\\vspace{11pt}\\\\\\setlength\\parindent{1.5em}' + str(potd_row[8]) + '```'
         except IndexError:
-            await ctx.send("There is no potd for day {}. ".format(number))
+            await ctx.send(f"There is no potd for day {number}. ")
             return
         print(to_tex)
 
@@ -304,7 +303,6 @@ class Potd(Cog):
             if len(potd) < 2:   # TESTING
                 await self.bot.get_channel(cfg.Config.config['log_channel']).send(
                         f"Invalid entry at row {j}, potd = {potd}")
-                pass
             if passed_current:
                 if len(potd) < 8:  # Then there has not been a potd on that day.
                     fail = True
@@ -327,16 +325,15 @@ class Potd(Cog):
                 soon.remove(potd[1])
         if soon != []:
             await self.bot.get_channel(cfg.Config.config['helper_lounge']).send(
-                f"Insufficient rows in the potd sheet! ")
+                "Insufficient rows in the potd sheet! "
+            )
         if remind != []:
-            mentions = ''
-            for i in remind:
-                mentions += self.responsible(i, (mode == 1) or (mode == 3))
+            mentions = ''.join(self.responsible(i, mode in [1, 3]) for i in remind)
             await curator_role.edit(mentionable = True)
             await self.bot.get_channel(cfg.Config.config['helper_lounge']).send(
                 f"Remember to fill in your POTDs! {mentions}")
             await curator_role.edit(mentionable = False)
-        if fail or not (mode is None):
+        if fail or mode is not None:
             return
 
         print('l123')
@@ -368,97 +365,99 @@ class Potd(Cog):
 
     @Cog.listener()
     async def on_message(self, message: discord.Message):
-        if message.channel.id == self.listening_in_channel and int(message.author.id) == cfg.Config.config[
-            'paradox_id']:
-            
-            # m = await message.channel.send(
-            #     '{} \nRate this problem with `-rate {} <rating>` and check its user difficulty rating with `-rating {}`'.format(
-            #         self.to_send, self.requested_number, self.requested_number))
-            self.listening_in_channel = -1 # Prevent reset
-            source_msg = await message.channel.send(embed=self.to_send) 
-            await source_msg.add_reaction("👍")
-            if self.late:
-                await source_msg.add_reaction('⏰')
+        if (
+            message.channel.id != self.listening_in_channel
+            or int(message.author.id) != cfg.Config.config['paradox_id']
+        ):
+            return
+        # m = await message.channel.send(
+        #     '{} \nRate this problem with `-rate {} <rating>` and check its user difficulty rating with `-rating {}`'.format(
+        #         self.to_send, self.requested_number, self.requested_number))
+        self.listening_in_channel = -1 # Prevent reset
+        source_msg = await message.channel.send(embed=self.to_send)
+        await source_msg.add_reaction("👍")
+        if self.late:
+            await source_msg.add_reaction('⏰')
 
-            if message.channel.id == cfg.Config.config['potd_channel']:
-                # record the ID of the source_msg if it is in POTD channel 
-                # get the row and column to update
-                column = openpyxl.utils.get_column_letter(cfg.Config.config['potd_sheet_message_id_col']+1)
-                reply = cfg.Config.service.spreadsheets().values().get(spreadsheetId=cfg.Config.config['potd_sheet'],
-                                                               range=POTD_RANGE).execute()
-                values = reply.get('values', [])
-                current_potd = int(values[0][0])  # this will be the top left cell which indicates the latest added potd
-                row = current_potd - self.requested_number + 2  # this gets the row requested
-                # update the source_msg in the sheet
-                request = cfg.Config.service.spreadsheets().values().update(spreadsheetId=cfg.Config.config['potd_sheet'], 
-                                                            range=f'{column}{row}', valueInputOption='RAW',body={"range": f'{column}{row}', "values": [[str(source_msg.id)]] })
-                response = request.execute()
+        if message.channel.id == cfg.Config.config['potd_channel']:
+            # record the ID of the source_msg if it is in POTD channel 
+            # get the row and column to update
+            column = openpyxl.utils.get_column_letter(cfg.Config.config['potd_sheet_message_id_col']+1)
+            reply = cfg.Config.service.spreadsheets().values().get(spreadsheetId=cfg.Config.config['potd_sheet'],
+                                                           range=POTD_RANGE).execute()
+            values = reply.get('values', [])
+            current_potd = int(values[0][0])  # this will be the top left cell which indicates the latest added potd
+            row = current_potd - self.requested_number + 2  # this gets the row requested
+            # update the source_msg in the sheet
+            request = cfg.Config.service.spreadsheets().values().update(spreadsheetId=cfg.Config.config['potd_sheet'], 
+                                                        range=f'{column}{row}', valueInputOption='RAW',body={"range": f'{column}{row}', "values": [[str(source_msg.id)]] })
+            response = request.execute()
 
-                # record the link to rendered image if it is in POTD channel 
-                # get the row and column to update
-                column = openpyxl.utils.get_column_letter(cfg.Config.config['potd_sheet_image_link_col']+1)
-                reply = cfg.Config.service.spreadsheets().values().get(spreadsheetId=cfg.Config.config['potd_sheet'],
-                                                               range=POTD_RANGE).execute()
-                values = reply.get('values', [])
-                current_potd = int(values[0][0])  # this will be the top left cell which indicates the latest added potd
-                row = current_potd - self.requested_number + 2  # this gets the row requested
-                # update the source_msg in the sheet
-                request = cfg.Config.service.spreadsheets().values().update(spreadsheetId=cfg.Config.config['potd_sheet'], 
-                                                            range=f'{column}{row}', valueInputOption='RAW',body={"range": f'{column}{row}', "values": [[str(message.attachments[0].proxy_url)]] })
-                response = request.execute()
+            # record the link to rendered image if it is in POTD channel 
+            # get the row and column to update
+            column = openpyxl.utils.get_column_letter(cfg.Config.config['potd_sheet_image_link_col']+1)
+            reply = cfg.Config.service.spreadsheets().values().get(spreadsheetId=cfg.Config.config['potd_sheet'],
+                                                           range=POTD_RANGE).execute()
+            values = reply.get('values', [])
+            current_potd = int(values[0][0])  # this will be the top left cell which indicates the latest added potd
+            row = current_potd - self.requested_number + 2  # this gets the row requested
+            # update the source_msg in the sheet
+            request = cfg.Config.service.spreadsheets().values().update(spreadsheetId=cfg.Config.config['potd_sheet'], 
+                                                        range=f'{column}{row}', valueInputOption='RAW',body={"range": f'{column}{row}', "values": [[str(message.attachments[0].proxy_url)]] })
+            response = request.execute()
 
-            bot_log = self.bot.get_channel(cfg.Config.config['log_channel'])
+        bot_log = self.bot.get_channel(cfg.Config.config['log_channel'])
 
-            ping_msg = None
-            if self.ping_daily:
-                r = self.bot.get_guild(cfg.Config.config['mods_guild']).get_role(cfg.Config.config['potd_role'])
-                await r.edit(mentionable=True)
-                ping_msg = await message.channel.send('<@&{}>'.format(cfg.Config.config['potd_role']))
-                await r.edit(mentionable=False)
+        ping_msg = None
+        if self.ping_daily:
+            r = self.bot.get_guild(cfg.Config.config['mods_guild']).get_role(cfg.Config.config['potd_role'])
+            await r.edit(mentionable=True)
+            ping_msg = await message.channel.send(f"<@&{cfg.Config.config['potd_role']}>")
+            await r.edit(mentionable=False)
 
-                if self.enable_dm:
+            if self.enable_dm:
 
-                    bot_spam = self.bot.get_channel(cfg.Config.config['bot_spam_channel'])
-                    potd_discussion_channel = self.bot.get_channel(cfg.Config.config['potd_discussion_channel'])
+                bot_spam = self.bot.get_channel(cfg.Config.config['bot_spam_channel'])
+                potd_discussion_channel = self.bot.get_channel(cfg.Config.config['potd_discussion_channel'])
 
-                    ping_embed = discord.Embed(title=f'POTD {self.latest_potd} has been posted: ',
-                        description=f'{potd_discussion_channel.mention}\n{message.jump_url}', colour=0xDCDCDC)
-                    for field in self.to_send.to_dict()['fields']:
-                        ping_embed.add_field(name=field['name'], value=field['value'])
-                    if message.attachments == []:
-                        await bot_log.send('No attachments found! ')
-                    else:
-                        ping_embed.set_image(url=message.attachments[0].url)
-                        dm_failed = []
-                        for id in self.dm_list:
-                            user = self.bot.get_user(int(id))
-                            try:
-                                await user.send(embed=ping_embed)
-                            except Exception:
-                                dm_failed.append(id)
-                        if dm_failed != []:
-                            msg = 'Remember to turn on DMs from this server to get private notifications! '
-                            for id in dm_failed: msg += f'<@{id}> '
-                            await bot_spam.send(msg, embed=ping_embed)
+                ping_embed = discord.Embed(title=f'POTD {self.latest_potd} has been posted: ',
+                    description=f'{potd_discussion_channel.mention}\n{message.jump_url}', colour=0xDCDCDC)
+                for field in self.to_send.to_dict()['fields']:
+                    ping_embed.add_field(name=field['name'], value=field['value'])
+                if message.attachments == []:
+                    await bot_log.send('No attachments found! ')
+                else:
+                    ping_embed.set_image(url=message.attachments[0].url)
+                    dm_failed = []
+                    for id in self.dm_list:
+                        user = self.bot.get_user(int(id))
+                        try:
+                            await user.send(embed=ping_embed)
+                        except Exception:
+                            dm_failed.append(id)
+                    if dm_failed != []:
+                        msg = 'Remember to turn on DMs from this server to get private notifications! '
+                        for id in dm_failed: msg += f'<@{id}> '
+                        await bot_spam.send(msg, embed=ping_embed)
 
-            if message.channel.id == cfg.Config.config['potd_channel']:
-                try:
-                    await message.publish()
-                    await source_msg.publish()
-                except Exception:
-                    await bot_log.send('Failed to publish!')
+        if message.channel.id == cfg.Config.config['potd_channel']:
+            try:
+                await message.publish()
+                await source_msg.publish()
+            except Exception:
+                await bot_log.send('Failed to publish!')
 
-            cursor = cfg.db.cursor()
-            if ping_msg is None:
-                cursor.execute(f'''INSERT INTO potd_info (potd_id, problem_msg_id, source_msg_id, ping_msg_id) VALUES
+        cursor = cfg.db.cursor()
+        if ping_msg is None:
+            cursor.execute(f'''INSERT INTO potd_info (potd_id, problem_msg_id, source_msg_id, ping_msg_id) VALUES
                     ('{self.latest_potd}', '{message.id}', '{source_msg.id}', '')''')
-            else:
-                cursor.execute(f'''INSERT INTO potd_info (potd_id, problem_msg_id, source_msg_id, ping_msg_id) VALUES
+        else:
+            cursor.execute(f'''INSERT INTO potd_info (potd_id, problem_msg_id, source_msg_id, ping_msg_id) VALUES
                     ('{self.latest_potd}', '{message.id}', '{source_msg.id}', '{ping_msg.id}')''')
-            cfg.db.commit()
+        cfg.db.commit()
 
-            await self.reset_potd()
-            await bot_log.send('POTD execution successful.')
+        await self.reset_potd()
+        await bot_log.send('POTD execution successful.')
 
     @commands.command(aliases=['potd'], brief='Displays the potd with the provided number. ')
     @commands.check(is_pc)
@@ -510,7 +509,7 @@ class Potd(Cog):
         sheet = self.get_potd_sheet()
         potd_row = self.get_potd_row(number, sheet)
 
-        if potd_row == None:
+        if potd_row is None:
             await ctx.send(f"There is no potd for day {number}. ")
             return
         else:
@@ -558,7 +557,7 @@ class Potd(Cog):
         sheet = self.get_potd_sheet()
         potd_row = self.get_potd_row(number, sheet)
 
-        if potd_row == None:
+        if potd_row is None:
             await ctx.send(f"There is no potd for day {number}. ")
             return
         else:
@@ -578,7 +577,7 @@ class Potd(Cog):
     @commands.cooldown(1, 5, BucketType.user)
     async def potd_search(self, ctx, diff_lower_bound:int, diff_upper_bound:int, genre:str='ACGN', search_unsolved:bool=True):
         if diff_lower_bound > diff_upper_bound:
-            await ctx.send(f"Difficulty lower bound cannot be higher than upper bound.")
+            await ctx.send("Difficulty lower bound cannot be higher than upper bound.")
             return
 
         # Set up the genre filter
@@ -587,7 +586,7 @@ class Potd(Cog):
         # set up the difficulty filter
         diff_lower_bound_filter = max(0,diff_lower_bound)
         diff_upper_bound_filter = max(min(99, diff_upper_bound), diff_lower_bound_filter)
-        
+
         potds = cfg.Config.service.spreadsheets().values().get(spreadsheetId=cfg.Config.config['potd_sheet'],
                                                                range=POTD_RANGE).execute().get('values', [])
         picked_potd = self.pick_potd(diff_lower_bound_filter, diff_upper_bound_filter, genre_filter, potds, [], ctx, search_unsolved)
@@ -595,14 +594,21 @@ class Potd(Cog):
             # fetch the picked POTD
             await self.potd_fetch(ctx, int(picked_potd))
         else:
-            await ctx.send(f"No POTD found!")
+            await ctx.send("No POTD found!")
 
     def potds_filtered_by_keywords(self, keyword_list: list[str]):
         potds = cfg.Config.service.spreadsheets().values().get(spreadsheetId=cfg.Config.config['potd_sheet'],
                                                                range=POTD_RANGE).execute().get('values', [])
-        filtered_potds = [x for x in potds if len(x) > cfg.Config.config['potd_sheet_statement_col']
-                        and all(keyword.lower() in x[cfg.Config.config['potd_sheet_statement_col']].lower() for keyword in keyword_list)]
-        return filtered_potds
+        return [
+            x
+            for x in potds
+            if len(x) > cfg.Config.config['potd_sheet_statement_col']
+            and all(
+                keyword.lower()
+                in x[cfg.Config.config['potd_sheet_statement_col']].lower()
+                for keyword in keyword_list
+            )
+        ]
 
     async def potd_search_keywords_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         filtered_potds = self.potds_filtered_by_keywords(current.split())
@@ -617,22 +623,19 @@ class Potd(Cog):
     async def potd_keywords(self, interaction: discord.Interaction, keywords: str):
         """Search potds using keywords"""
 
-        filtered_potds = self.potds_filtered_by_keywords(keywords.split())
-            
-        if filtered_potds:
+        if filtered_potds := self.potds_filtered_by_keywords(keywords.split()):
             picked_potd_row = random.choice(filtered_potds)
-            image_link = self.check_for_image_link(picked_potd_row)
-            if image_link:
+            if image_link := self.check_for_image_link(picked_potd_row):
                 await interaction.response.send_message(f"[image]({image_link})")
             else:
                 output = '<@' + str(cfg.Config.config['paradox_id']) + '>\n' + self.texify_potd(picked_potd_row)
                 await interaction.response.send_message(output, delete_after=5)
         else:
-            await interaction.response.send_message(f"No POTD found!", ephemeral=True)
+            await interaction.response.send_message("No POTD found!", ephemeral=True)
 
     def parse_genre_input(self, genre):
         complex_genres = genre.split("'")[1::2]
-        simple_genres = "".join(genre.split("'")[0::2])
+        simple_genres = "".join(genre.split("'")[::2])
 
         genre_filter = []
         for character in simple_genres:
@@ -697,8 +700,9 @@ class Potd(Cog):
             await ctx.send(f"Template not found. Possible templates: {', '.join(template_list)}. Use `-help potd_mock` for more details.")
             return
         else:
-            if template == "IMO":
-                difficulty_bounds = [[5,7],[7,9],[9,11],[5,7],[7,9],[9,11]]
+            if template == "AFMO":
+                difficulty_bounds = [[12,"T"],[12,"T"],[12,"T"],[13,"T"]]
+
             elif template == "AMO":
                 difficulty_bounds = [[2,3],[3,4],[4,5],[5,6],[2,3],[3,4],[4,5],[5,6]]
             elif template == "APMO":
@@ -706,22 +710,19 @@ class Potd(Cog):
             elif template == "BMO1":
                 difficulty_bounds = [[1,2],[1,2],[2,3],[2,3],[3,5],[3,6]]
             elif template == "BMO2":
-                difficulty_bounds = [[3,4],[4,5],[5,6],[6,7]]         
+                difficulty_bounds = [[3,4],[4,5],[5,6],[6,7]]
+            elif template == "CHINA":
+                difficulty_bounds = [[7,8],[8,10],[10,12],[7,8],[8,10],[10,12]]
             elif template == "IGO":
                 difficulty_bounds = [[5,6],[6,7],[7,8],[8,9],[9,10]]
+            elif template in {"IMO", "USAMO"}:
+                difficulty_bounds = [[5,7],[7,9],[9,11],[5,7],[7,9],[9,11]]
             elif template == "NZMO2":
                 difficulty_bounds = [[1,2],[2,3],[3,4],[4,5],[5,6]]
             elif template == "SMO2":
                 difficulty_bounds = [[4,5],[5,6],[6,7],[7,8],[8,9]]
-            elif template == "USAMO":
-                difficulty_bounds = [[5,7],[7,9],[9,11],[5,7],[7,9],[9,11]]
             elif template == "USAJMO":
                 difficulty_bounds = [[3,5],[5,7],[7,8],[3,5],[5,7],[7,8]]
-            elif template == "CHINA":
-                difficulty_bounds = [[7,8],[8,10],[10,12],[7,8],[8,10],[10,12]]
-            elif template == "AFMO": # easter egg
-                difficulty_bounds = [[12,"T"],[12,"T"],[12,"T"],[13,"T"]]
-
         # SMO2 seems to have an unspoken rule to start with geometry at P1 and nowhere else
         if template == "SMO2":
             genre_rule = ["G","ACN","ACN","ACN","ACN"]
@@ -746,21 +747,23 @@ class Potd(Cog):
             picked_potd = self.pick_potd(difficulty_bounds[i][0], difficulty_bounds[i][1], genres[i], potds, already_picked, ctx, search_unsolved)
             already_picked.append(picked_potd)
             potd_statement = self.get_potd_statement(int(picked_potd), potds)
-            problems_tex.append(f'\\textbf{{Problem {i+1}. (POTD {str(picked_potd)})}}\\\\ ' + potd_statement)
-        
-        if template in ["IMO","AMO","USAMO","USAJMO","CHINA"] : # 2-day contests
-            if template in ["IMO","CHINA","USAMO","USAJMO"]:
+            problems_tex.append(
+                f'\\textbf{{Problem {i + 1}. (POTD {str(picked_potd)})}}\\\\ {potd_statement}'
+            )
+
+        if template in {"IMO", "AMO", "USAMO", "USAJMO", "CHINA"}: # 2-day contests
+            if template in {"IMO", "CHINA", "USAMO", "USAJMO"}:
                 index_day1 = [0,1,2]
                 index_day2 = [3,4,5]
-            elif template in ["AMO"]:
+            elif template in {"AMO"}:
                 index_day1 = [0,1,2,3]
                 index_day2 = [4,5,6,7]
 
-            name_day1 = template + ' (Day 1)'
+            name_day1 = f'{template} (Day 1)'
             problems_tex_day1 = [problems_tex[index] for index in index_day1]
             await self.send_out_mock(ctx, name_day1, problems_tex_day1)
 
-            name_day2 = template + ' (Day 2)'
+            name_day2 = f'{template} (Day 2)'
             problems_tex_day2 = [problems_tex[index] for index in index_day2]
             await self.send_out_mock(ctx, name_day2, problems_tex_day2)
         else: # 1-day contests

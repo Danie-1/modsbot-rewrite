@@ -31,18 +31,17 @@ class Mathjams(Cog):
             mathjams_channel = await self.bot.fetch_channel(cfg.Config.config['mathjams_channel'])
             r = self.bot.get_guild(cfg.Config.config['mods_guild']).get_role(role_id)
             await r.edit(mentionable=True)
-            await mathjams_channel.send('Mathjams in 5 minutes XD! <@&{}>'.format(role_id))
+            await mathjams_channel.send(f'Mathjams in 5 minutes XD! <@&{role_id}>')
             await r.edit(mentionable=False)
 
     @commands.command()
     @commands.check(cfg.is_staff)
     async def mathjams(self, ctx, status: bool=None):
-        if status == None:
-            self.ping = not self.ping
-        else:
-            self.ping = status
+        self.ping = not self.ping if status is None else status
         cursor = cfg.db.cursor()
-        cursor.execute(f"UPDATE settings SET value = '{str(self.ping)}' WHERE setting = 'mathjams_ping'")
+        cursor.execute(
+            f"UPDATE settings SET value = '{self.ping}' WHERE setting = 'mathjams_ping'"
+        )
         cfg.db.commit()
         await ctx.guild.get_channel(cfg.Config.config['log_channel']).send(
             f'**Mathjams auto ping set to `{self.ping}` by {ctx.author.mention}**')
